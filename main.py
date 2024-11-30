@@ -2,11 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 from typing import List
-from caption_generator import get_captions
+from utils import get_captions, join_captions, get_json_response
 from dotenv import load_dotenv
 import os
-import re
-import json
+import time
 
 load_dotenv()
 
@@ -72,7 +71,7 @@ async def analyze_sentiment():
     }
 
     # Prompt template for the API
-    prompt = (
+    sentiment_analyis_prompt = (
         "Perform a thorough sentiment analysis of the above caption \n"
         "Format the output as follows in json format and directly give the json format, do not give any text only the metrics:"
         "{\"sentiment\": (positive or negative or neutral),\"score\": (ranging from 0.0 to 1.0, for negative score should be 0.0 to 0.4, positive should be 0.6 to 1.0 and neutal 0.4 to 0.6),\"positive_word_count\": ,\"negative_word_count\": }"
@@ -80,171 +79,90 @@ async def analyze_sentiment():
     )
 
     # Process each caption
-    results = []
+    analysis_results = []
     for caption in captions:
-        response = requests.post(
+        analysis_response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers=headers,
             json={
                 "model": "llama3-70b-8192",
                 
-                "messages": [{"role": "user", "content": f"{caption}\n{prompt}"}]
+                "messages": [{"role": "user", "content": f"{caption}\n{sentiment_analyis_prompt}"}]
             }
         )
 
         # Extract JSON data from the response
         try:
-            response_json = response.json()  # Parse JSON from the response
-            content = response_json.get('choices', [{}])[0].get('message', {}).get('content', None)
-            match = re.search(r'\{.*?\}', content, re.DOTALL)
-            if match:
-                content = match.group(0)  # Extract the matched JSON-like string
-                json_object = json.loads(content)  # Convert the string to a JSON object
-                results.append(json_object)
-            else:
-                print(f"Error: No JSON object found in response for caption: {caption}")
+            get_json_response(analysis_response, analysis_results)
         except Exception as e:
             print(f"Error processing caption '{caption}': {e}")
             
-    # print(results)
+    # print(analysis_results)
+    
+    time.sleep(3)
+    
+    # Generate key themes for the captions
+    caption_text = join_captions(captions)
+    
+    key_themes_prompt = (
+        "\n\nA sentiment analysis was performed on the above captions, now I want atleast 3 key themes from these captions\n"
+        "Directly give the key themes with their respective explanations without using the word caption use post instead in the following format:\n"
+        "{ \"key_theme_1\":\"explanation\", \"key_theme_2\":\"explanation\", \"key_theme_3\":\"explanation\"}\n"
+        "Strictly follow the format."
+    )
+    
+    key_themes_response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json={
+            "model": "llama3-70b-8192",
+            
+            "messages": [{"role": "user", "content": f"{caption_text}\n\n{key_themes_prompt}"}]
+        }
+    )
+
+    key_themes = []
+    try:
+        get_json_response(key_themes_response, key_themes)
+    except Exception as e:
+        print(f"Error generating key themes from the captions: {e}")
+    
     
     # Return the aggregated results
-    return {"results": results}
+    return {"analysis_results": analysis_results, "key_themes":key_themes}
 
-    # Sample results
-    # {
-    # "results": [
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 5,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.83,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "neutral",
-    #     "score": 0.55,
-    #     "positive_word_count": 4,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "neutral",
-    #     "score": 0.5,
-    #     "positive_word_count": 2,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "neutral",
-    #     "score": 0.5,
-    #     "positive_word_count": 0,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.7,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 2
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 5,
-    #     "negative_word_count": 1
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 3,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "neutral",
-    #     "score": 0.55,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 1
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 6,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 6,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "neutral",
-    #     "score": 0.55,
-    #     "positive_word_count": 2,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 7,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "positive",
-    #     "score": 0.8,
-    #     "positive_word_count": 14,
-    #     "negative_word_count": 0
-    #     },
-    #     {
-    #     "sentiment": "negative",
-    #     "score": 0.2,
-    #     "positive_word_count": 0,
-    #     "negative_word_count": 4
-    #     }
-    # ]
-    # }
+# Sample output
+# {
+#     "analysis_results": [
+#     {
+#         "sentiment": "positive",
+#         "score": 0.8,
+#         "positive_word_count": 5,
+#         "negative_word_count": 0
+#         },
+#         {
+#         "sentiment": "neutral",
+#         "score": 0.55,
+#         "positive_word_count": 4,
+#         "negative_word_count": 0
+#         },
+#         {
+#         "sentiment": "negative",
+#         "score": 0.2,
+#         "positive_word_count": 0,
+#         "negative_word_count": 4
+#         }
+#         .
+#         .
+#         .
+#     ],
+#     "key_themes": [
+#     {
+#         "Shopping and Discounts": "Many posts are promoting Black Friday sales, discounts, and promotions, encouraging followers to shop and take advantage of deals on various products.",
+#         "Wellness and Self-Care": "Several posts focus on wellness, self-care, and relaxation, suggesting that people prioritize their well-being during the holiday season.",
+#         "Holiday Shopping and Gift Ideas": "Posts also highlight gift ideas, holiday shopping, and the importance of getting a head start on holiday preparations, with some even offering exclusive discounts and promotions."
+#     }
+#     ]
+# }
+
+
