@@ -1,4 +1,5 @@
 import re
+import json
 
 # PARTIAL, NO NEED
 def get_captions(data):
@@ -54,5 +55,22 @@ def clean_captions(data):
     return cleaned_captions
 
 
-if __name__=="__main__":
-    print(get_captions())
+def join_captions(captions):
+    captions = "\n\n".join(caption for caption in captions)
+    return captions
+
+
+def get_json_response(response, analysis_results):
+    response_json = response.json()  # Parse JSON from the response
+    content = response_json.get('choices', [{}])[0].get('message', {}).get('content', None)
+    match = re.search(r'\{.*?\}', content, re.DOTALL)
+    if match:
+        content = match.group(0)  # Extract the matched JSON-like string
+        json_object = json.loads(content)  # Convert the string to a JSON object
+        analysis_results.append(json_object)
+    else:
+        print(f"Error: No JSON object found in response for caption")
+
+
+# if __name__=="__main__":
+#     print(get_captions())
