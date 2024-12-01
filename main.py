@@ -99,17 +99,20 @@ async def analyze_sentiment():
             
     # print(analysis_results)
     
-    time.sleep(3)
+    time.sleep(6)
     
-    # Generate key themes for the captions
+    
     caption_text = join_captions(captions)
     
+    # Generate key themes for the captions
     key_themes_prompt = (
         "\n\nA sentiment analysis was performed on the above captions, now I want atleast 3 key themes from these captions\n"
         "Directly give the key themes with their respective explanations without using the word caption use post instead in the following format:\n"
         "{ \"key_theme_1\":\"explanation\", \"key_theme_2\":\"explanation\", \"key_theme_3\":\"explanation\"}\n"
         "Strictly follow the format."
     )
+    
+    print(f"{caption_text}\n\n{key_themes_prompt}")
     
     key_themes_response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -126,10 +129,36 @@ async def analyze_sentiment():
         get_json_response(key_themes_response, key_themes)
     except Exception as e:
         print(f"Error generating key themes from the captions: {e}")
+        
     
+    time.sleep(18)
+    
+    # Generate key themes for the captions
+    insights_prompt = (
+        "\n\nA sentiment analysis was performed on the above captions\n"
+        "Now I want 3 actionable insights based on these captions in the following format\n"
+        "{ \"insight_1\":\"explanation\", \"insight_2\":\"explanation\", \"insight_3\":\"explanation\"}\n"
+        "Strictly follow the format."
+    )
+
+    insights_response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json={
+            "model": "llama3-70b-8192",
+            "messages": [{"role": "user", "content": f"{caption_text}\n\n{insights_prompt}"}]
+        }
+    )
+    insights = []
+
+    try:
+        get_json_response(insights_response, insights)
+    except Exception as e:
+        print(f"Error generating insights: {e}")
+
     
     # Return the aggregated results
-    return {"analysis_results": analysis_results, "key_themes":key_themes}
+    return {"analysis_results": analysis_results, "key_themes":key_themes, "insights":insights}
 
 # Sample output
 # {
